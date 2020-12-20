@@ -6,6 +6,8 @@ from scrapy.http import FormRequest
 from scrapy import signals
 from lxml import html
 import time
+import itertools
+
 
 def make_headers():
     headers = {
@@ -18,6 +20,7 @@ def make_headers():
 
 timeout = 100
 conn_limit = 200
+
 
 class MainScraper(scrapy.Spider):
     name = "arrt_scrapy"
@@ -92,82 +95,77 @@ class MainScraper(scrapy.Spider):
         __VIEWSTATEGENERATOR = response.xpath('//input[@name="__VIEWSTATEGENERATOR"]/@value').extract_first()
         __EVENTVALIDATION = response.xpath('//input[@name="__EVENTVALIDATION"]/@value').extract_first()
 
+        Jaar_list = list([str(e) for e in range(2020, 2016, -1)])
         Kwartaal_list = response.xpath(
             '//div[@id="ctl00_ContentPlaceHolder1_ReportViewer1_ctl09_ctl05"]/select/option/@value').extract()[1:]
-        Arbeidsmarktregio_list = [
-            (row.xpath('.//input/@name').extract_first(), row.xpath('.//label/text()').extract_first().strip()) for row
-            in response.xpath(
-                '//div[@id="ctl00_ContentPlaceHolder1_ReportViewer1_ctl09_ctl07_divDropDown"]/table/tr/td[1]')][2:]
-        Jaar_list = list(range(2020, 2016, -1))
+        Arbeidsmarktregio_list = [(str(i - 1), " ".join(row.xpath('.//label/text()').extract_first().strip().split()))
+                                  for
+                                  i, row in enumerate(response.xpath(
+                '//div[@id="ctl00_ContentPlaceHolder1_ReportViewer1_ctl09_ctl07_divDropDown"]/table/tr/td[1]'))][2:]
 
-        for Jaar in Jaar_list:
-            Jaar = str(Jaar)
-            for Kwartaal in Kwartaal_list:
-                for n, Regio in Arbeidsmarktregio_list:
-                    Regio = " ".join(Regio.split())
-                    HiddenIndices = n.replace('ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$divDropDown$ctl', '')
-                    formdata = {
-                        "ctl00$ContentPlaceHolder1$ctl00": "ctl00$ContentPlaceHolder1$ctl00|ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl00": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl01": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$isReportViewerInVs": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl15": "ltr",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl16": "standards",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$AsyncWait$HiddenCancelField": "False",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl03$ddValue": Jaar,
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl05$ddValue": Kwartaal,
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$txtValue": Regio,
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$txtValue": "Totaal",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$divDropDown$ctl01$HiddenIndices": HiddenIndices,
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$divDropDown$ctl01$HiddenIndices": "0",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$store": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$collapse": "false",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl10$ctl00$CurrentPage": "1",
-                        "null": "100",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl10$ctl03$ctl00": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl13$ClientClickedId": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$store": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$collapse": "false",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$VisibilityState$ctl00": "None",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ScrollPosition": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl02": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl03": "",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl04": "100",
-                        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07",
-                        "__EVENTARGUMENT": "",
-                        "__LASTFOCUS": "",
-                        "__VIEWSTATE": __VIEWSTATE,
-                        "__VIEWSTATEGENERATOR": __VIEWSTATEGENERATOR,
-                        "__EVENTVALIDATION": __EVENTVALIDATION,
-                        "__ASYNCPOST": "true",
-                        "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl00": "View Report"
-                    }
+        self.search_list = list(itertools.product(Jaar_list, Kwartaal_list, Arbeidsmarktregio_list))
 
-                    headers = make_headers()
-                    # headers['Cookie'] = response.headers[b'Set-Cookie'].decode()
-                    request = FormRequest(
-                        url=self.start_url,
-                        method='POST',
-                        formdata=formdata,
-                        headers=headers,
-                        callback=self.get_tokens,
-                        errback=self.fail_tokens,
-                        dont_filter=True,
-                        meta={
-                            'url': self.start_url,
-                            'Jaar': Jaar,
-                            'Kwartaal': Kwartaal,
-                            'Regio': Regio,
-                            'HiddenIndices': HiddenIndices,
-                            '__VIEWSTATE': __VIEWSTATE,
-                            '__VIEWSTATEGENERATOR': __VIEWSTATEGENERATOR,
-                            '__EVENTVALIDATION': __EVENTVALIDATION,
-                            # 'proxy': pxy
-                            # 'handle_httpstatus_all': True,
-                            # 'dont_redirect': True,
-                        }
-                    )
-                    yield request
+        for Jaar, Kwartaal, (HiddenIndices, Regio) in self.search_list:
+            formdata = {
+                "ctl00$ContentPlaceHolder1$ctl00": "ctl00$ContentPlaceHolder1$ctl00|ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl05$ddValue",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl00": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl01": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$isReportViewerInVs": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl15": "ltr",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl16": "standards",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$AsyncWait$HiddenCancelField": "False",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl03$ddValue": Jaar,
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl05$ddValue": Kwartaal,
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$txtValue": "Totaal",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$txtValue": "Totaal",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$divDropDown$ctl01$HiddenIndices": "0",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$divDropDown$ctl01$HiddenIndices": "0",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$store": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$collapse": "false",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl10$ctl00$CurrentPage": "1",
+                "null": "100",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl10$ctl03$ctl00": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl13$ClientClickedId": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$store": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$collapse": "false",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$VisibilityState$ctl00": "ReportPage",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ScrollPosition": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl02": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl03": "",
+                "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl04": "100",
+                "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl05$ddValue",
+                "__EVENTARGUMENT": "",
+                "__LASTFOCUS": "",
+                "__VIEWSTATE": __VIEWSTATE,
+                "__VIEWSTATEGENERATOR": __VIEWSTATEGENERATOR,
+                "__EVENTVALIDATION": __EVENTVALIDATION,
+                "__ASYNCPOST": "true",
+            }
+
+            headers = make_headers()
+            request = FormRequest(
+                url=self.start_url,
+                method='POST',
+                formdata=formdata,
+                headers=headers,
+                callback=self.get_Kwartaal_tokens,
+                errback=self.fail_Kwartaal_tokens,
+                dont_filter=True,
+                meta={
+                    'url': self.start_url,
+                    'Jaar': Jaar,
+                    'Kwartaal': Kwartaal,
+                    'Regio': Regio,
+                    'HiddenIndices': HiddenIndices,
+                    '__VIEWSTATE': __VIEWSTATE,
+                    '__VIEWSTATEGENERATOR': __VIEWSTATEGENERATOR,
+                    '__EVENTVALIDATION': __EVENTVALIDATION,
+                    # 'proxy': pxy
+                    # 'handle_httpstatus_all': True,
+                    # 'dont_redirect': True,
+                }
+            )
+            yield request
 
     def fail_first_page(self, failure):
         request = FormRequest(
@@ -186,7 +184,7 @@ class MainScraper(scrapy.Spider):
         )
         yield request
 
-    def get_tokens(self, response):
+    def get_Kwartaal_tokens(self, response):
         Jaar = response.meta['Jaar']
         Kwartaal = response.meta['Kwartaal']
         Regio = response.meta['Regio']
@@ -197,10 +195,111 @@ class MainScraper(scrapy.Spider):
 
         split_info = response.text.split('|')
         try:
-            __VIEWSTATE = split_info[split_info.index('__VIEWSTATE')+1]
-            __VIEWSTATEGENERATOR = split_info[split_info.index('__VIEWSTATEGENERATOR')+1]
-            __EVENTVALIDATION = split_info[split_info.index('__EVENTVALIDATION')+1]
-        except:
+            __VIEWSTATE = split_info[split_info.index('__VIEWSTATE') + 1]
+            __VIEWSTATEGENERATOR = split_info[split_info.index('__VIEWSTATEGENERATOR') + 1]
+            __EVENTVALIDATION = split_info[split_info.index('__EVENTVALIDATION') + 1]
+        except Exception as e:
+            # print([Jaar, Kwartaal, HiddenIndices, Regio])
+            return
+
+        formdata = {
+            "ctl00$ContentPlaceHolder1$ctl00": "ctl00$ContentPlaceHolder1$ctl00|ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl00": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl03$ctl01": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$isReportViewerInVs": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl15": "ltr",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl16": "standards",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$AsyncWait$HiddenCancelField": "False",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl03$ddValue": Jaar,
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl05$ddValue": Kwartaal,
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$txtValue": Regio,
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$txtValue": "Totaal",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07$divDropDown$ctl01$HiddenIndices": HiddenIndices,
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl09$divDropDown$ctl01$HiddenIndices": "0",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$store": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ToggleParam$collapse": "false",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl13$ClientClickedId": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$store": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl12$collapse": "false",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$VisibilityState$ctl00": "None",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ScrollPosition": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl02": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl03": "",
+            "ctl00$ContentPlaceHolder1$ReportViewer1$ctl14$ReportControl$ctl04": "100",
+            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ReportViewer1$ctl09$ctl07",
+            "__EVENTARGUMENT": "",
+            "__LASTFOCUS": "",
+            "__VIEWSTATE": __VIEWSTATE,
+            "__VIEWSTATEGENERATOR": __VIEWSTATEGENERATOR,
+            "__EVENTVALIDATION": __EVENTVALIDATION,
+            "__ASYNCPOST": "true",
+        }
+
+        headers = make_headers()
+        request = FormRequest(
+            url=self.start_url,
+            method='POST',
+            formdata=formdata,
+            headers=headers,
+            callback=self.get_Arbeidsmarktregio_tokens,
+            errback=self.fail_Arbeidsmarktregio_tokens,
+            dont_filter=True,
+            meta={
+                'url': self.start_url,
+                'Jaar': Jaar,
+                'Kwartaal': Kwartaal,
+                'Regio': Regio,
+                'HiddenIndices': HiddenIndices,
+                "__VIEWSTATE": __VIEWSTATE,
+                "__VIEWSTATEGENERATOR": __VIEWSTATEGENERATOR,
+                "__EVENTVALIDATION": __EVENTVALIDATION,
+                # 'proxy': pxy
+                # 'handle_httpstatus_all': True,
+                # 'dont_redirect': True,
+            }
+        )
+        yield request
+
+    def fail_Kwartaal_tokens(self, failure):
+        request = FormRequest(
+            url=failure.request.meta['url'],
+            method='GET',
+            headers=make_headers(),
+            callback=self.get_Kwartaal_tokens,
+            errback=self.fail_Kwartaal_tokens,
+            dont_filter=True,
+            meta={
+                'url': failure.request.meta['url'],
+                'Jaar': failure.request.meta['Jaar'],
+                'Kwartaal': failure.request.meta['Kwartaal'],
+                'Regio': failure.request.meta['Regio'],
+                'HiddenIndices': failure.request.meta['HiddenIndices'],
+                '__VIEWSTATE': failure.request.meta['__VIEWSTATE'],
+                '__VIEWSTATEGENERATOR': failure.request.meta['__VIEWSTATEGENERATOR'],
+                '__EVENTVALIDATION': failure.request.meta['__EVENTVALIDATION'],
+                # 'proxy': pxy
+                # 'handle_httpstatus_all': True,
+                # 'dont_redirect': True,
+            }
+        )
+        yield request
+
+    def get_Arbeidsmarktregio_tokens(self, response):
+        Jaar = response.meta['Jaar']
+        Kwartaal = response.meta['Kwartaal']
+        Regio = response.meta['Regio']
+        HiddenIndices = response.meta['HiddenIndices']
+        __VIEWSTATE = response.meta['__VIEWSTATE']
+        __VIEWSTATEGENERATOR = response.meta['__VIEWSTATEGENERATOR']
+        __EVENTVALIDATION = response.meta['__EVENTVALIDATION']
+
+        split_info = response.text.split('|')
+        try:
+            __VIEWSTATE = split_info[split_info.index('__VIEWSTATE') + 1]
+            __VIEWSTATEGENERATOR = split_info[split_info.index('__VIEWSTATEGENERATOR') + 1]
+            __EVENTVALIDATION = split_info[split_info.index('__EVENTVALIDATION') + 1]
+        except Exception as e:
+            # print([Jaar, Kwartaal, HiddenIndices, Regio])
             return
 
         formdata = {
@@ -255,6 +354,7 @@ class MainScraper(scrapy.Spider):
                 'Jaar': Jaar,
                 'Kwartaal': Kwartaal,
                 'Regio': Regio,
+                'HiddenIndices': HiddenIndices,
                 # 'proxy': pxy
                 # 'handle_httpstatus_all': True,
                 # 'dont_redirect': True,
@@ -262,13 +362,13 @@ class MainScraper(scrapy.Spider):
         )
         yield request
 
-    def fail_tokens(self, failure):
+    def fail_Arbeidsmarktregio_tokens(self, failure):
         request = FormRequest(
             url=failure.request.meta['url'],
             method='GET',
             headers=make_headers(),
-            callback=self.get_tokens,
-            errback=self.fail_tokens,
+            callback=self.get_Arbeidsmarktregio_tokens,
+            errback=self.fail_Arbeidsmarktregio_tokens,
             dont_filter=True,
             meta={
                 'url': failure.request.meta['url'],
@@ -290,13 +390,15 @@ class MainScraper(scrapy.Spider):
         Jaar = response.meta['Jaar']
         Kwartaal = response.meta['Kwartaal']
         Regio = response.meta['Regio']
+        HiddenIndices = response.meta['HiddenIndices']
         split_info = response.text.split('|')
 
         try:
             tree = html.fromstring(split_info[11])
             rows = tree.xpath('//table[@id]/tr[not(@id)]')
             for i, row in enumerate(rows):
-                result_row = [td.xpath('.//text()')[0].strip() if td.xpath('.//text()') else "" for td in row.xpath('./td')]
+                result_row = [td.xpath('.//text()')[0].strip() if td.xpath('.//text()') else "" for td in
+                              row.xpath('./td')]
                 if i == 0:
                     result_row = result_row[2:]
                 else:
@@ -305,8 +407,9 @@ class MainScraper(scrapy.Spider):
                 self.insert_row(result_row)
                 print(result_row)
         except Exception as e:
-            print([Jaar, Kwartaal, Regio])
-            print(e)
+            print([Jaar, Kwartaal, HiddenIndices, Regio])
+            # print(e)
+            pass
 
     def fail_details(self, failure):
         request = FormRequest(
@@ -321,6 +424,7 @@ class MainScraper(scrapy.Spider):
                 'Jaar': failure.request.meta['Jaar'],
                 'Kwartaal': failure.request.meta['Kwartaal'],
                 'Regio': failure.request.meta['Regio'],
+                'HiddenIndices': failure.request.meta['HiddenIndices'],
                 # 'proxy': pxy
                 # 'handle_httpstatus_all': True,
                 # 'dont_redirect': True,
