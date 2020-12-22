@@ -7,6 +7,7 @@ from scrapy import signals
 import json
 from urllib.parse import urljoin
 
+
 def make_headers():
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
@@ -15,8 +16,10 @@ def make_headers():
     }
     return headers
 
+
 timeout = 100
 conn_limit = 200
+
 
 class MainScraper(scrapy.Spider):
     name = "arrt_scrapy"
@@ -111,7 +114,6 @@ class MainScraper(scrapy.Spider):
             )
             yield request
 
-
     def fail_leagues(self, failure):
         request = FormRequest(
             url=failure.request.meta['url'],
@@ -140,7 +142,7 @@ class MainScraper(scrapy.Spider):
         self.total_result['leagues'][leagueName]['teams'] = {}
 
         rows = response.xpath('//div[@class="eight columns"]/table[4]//tr[@class="odd"]')
-        for i, row  in enumerate(rows):
+        for i, row in enumerate(rows):
             ranking = row.xpath('./td[1]/b/text()').extract_first()
             teamName = row.xpath('./td[2]/a/text()').extract_first()
             teamLink = urljoin("https://www.soccerstats.com/", row.xpath('./td[2]/a/@href').extract_first())
@@ -164,13 +166,14 @@ class MainScraper(scrapy.Spider):
             }
 
             request = FormRequest(
-                url=leagueURL,
+                url=teamLink,
                 method='GET',
                 headers=make_headers(),
                 callback=self.get_more_stats,
                 errback=self.fail_more_stats,
                 dont_filter=True,
                 meta={
+                    'teamLink': teamLink,
                     'leagueURL': leagueURL,
                     'leagueName': leagueName,
                     'teamName': teamName,
@@ -200,21 +203,140 @@ class MainScraper(scrapy.Spider):
         yield request
 
     def get_more_stats(self, response):
+        teamLink = response.meta['teamLink']
         leagueURL = response.meta['leagueURL']
         leagueName = response.meta['leagueName']
         teamName = response.meta['teamName']
 
-        print('')
+        rows = response.xpath(
+            f'//h2[contains(text(),"statistics") and contains(text(), "{teamName}")]/../../../tr[contains(@class,"trow")]')
+
+        try:
+            scoring = {
+                'goalsScored': {
+                    "home": rows[1].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[1].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[1].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'goalsScoredPerMatch': {
+                    "home": rows[2].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[2].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[2].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'goalsConceded': {
+                    "home": rows[3].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[3].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[3].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'goalsConcededPerMatch': {
+                    "home": rows[4].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[4].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[4].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'scoredConcPerMatch': {
+                    "home": rows[5].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[5].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[5].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'matchesOver1.5Goals': {
+                    "home": rows[6].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[6].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[6].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'matchesOver2.5Goals': {
+                    "home": rows[7].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[7].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[7].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'matchesOver3.5Goals': {
+                    "home": rows[8].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[8].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[8].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'matchesOver4.5Goals': {
+                    "home": rows[9].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[9].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[9].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'matchesOver5.5Goals': {
+                    "home": rows[10].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[10].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[10].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'over0.5gAtHalftime': {
+                    "home": rows[11].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[11].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[11].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'over1.5gAtHalftime': {
+                    "home": rows[12].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[12].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[12].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'over2.5gAtHalftime': {
+                    "home": rows[13].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[13].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[13].xpath('./td[4]//text()').extract_first().strip(),
+                },
+            }
+
+            self.total_result['leagues'][leagueName]['teams'][teamName]['stats']['scoring'] = scoring
+
+            rows = response.xpath(
+                '//h2[contains(text(),"Scoring patterns")]/../../../tr[contains(@class,"trow")]')
+
+            goalNoGoal = {
+                'cleanSheets': {
+                    "home": rows[1].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[1].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[1].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'wonToNil': {
+                    "home": rows[2].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[2].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[2].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'scoredInBothHalves': {
+                    "home": rows[3].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[3].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[3].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'bothTeamsScored': {
+                    "home": rows[4].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[4].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[4].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'failedToScore': {
+                    "home": rows[5].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[5].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[5].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'lostToNil': {
+                    "home": rows[6].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[6].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[6].xpath('./td[4]//text()').extract_first().strip(),
+                },
+                'concededInBothHalves': {
+                    "home": rows[7].xpath('./td[2]//text()').extract_first().strip(),
+                    "away": rows[7].xpath('./td[3]//text()').extract_first().strip(),
+                    "all": rows[7].xpath('./td[4]//text()').extract_first().strip(),
+                }
+            }
+        except:
+            print('')
+
+        self.total_result['leagues'][leagueName]['teams'][teamName]['stats']['goalNoGoal'] = goalNoGoal
 
     def fail_more_stats(self, failure):
         request = FormRequest(
-            url=failure.request.meta['leagueURL'],
+            url=failure.request.meta['teamLink'],
             method='GET',
             headers=make_headers(),
             callback=self.get_more_stats,
             errback=self.fail_more_stats,
             dont_filter=True,
             meta={
+                'teamLink': failure.request.meta['teamLink'],
                 'leagueURL': failure.request.meta['leagueURL'],
                 'leagueName': failure.request.meta['leagueName'],
                 'teamName': failure.request.meta['teamName'],
@@ -236,6 +358,7 @@ class MainScraper(scrapy.Spider):
 
     def spider_closed(self, spider):
         print(json.dumps(self.total_result, indent=3))
+
 
 if __name__ == '__main__':
     from scrapy.utils.project import get_project_settings
