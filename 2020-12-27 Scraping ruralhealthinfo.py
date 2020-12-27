@@ -5,6 +5,7 @@ import scrapy
 from scrapy.http import FormRequest
 from scrapy import signals
 import xlrd
+from lxml import html
 
 
 def make_headers():
@@ -17,7 +18,7 @@ def make_headers():
 
 
 timeout = 100
-conn_limit = 200
+conn_limit = 300
 
 proxy_file_name = 'proxy_http_ip.txt'
 PROXIES = []
@@ -30,7 +31,7 @@ class MainScraper(scrapy.Spider):
     custom_settings = {
         'ROBOTSTXT_OBEY': False,
         'CONCURRENT_REQUESTS': conn_limit,
-        # 'AUTOTHROTTLE_ENABLED': True,
+        'AUTOTHROTTLE_ENABLED': True,
         'AUTOTHROTTLE_TARGET_CONCURRENCY': conn_limit,
         # 'AUTOTHROTTLE_START_DELAY ': 1,
         # 'AUTOTHROTTLE_MAX_DELAY ': 360,
@@ -67,7 +68,8 @@ class MainScraper(scrapy.Spider):
         heading = [
             "id", "address", "geocoded_address", "latitude", "longitude", "", "census_tract", "county", "rhc", "forhp",
             "c2010_pct_rural", "cbsa_type", "cbsa_name", "cbsa_id", "ruca_code", "rucc_code", "uic", "ua",
-            "shortage_primary_care", "shortage_dental_care", "shortage_mental_health", "mua", "mup", "mua_ge", "mup_ge"
+            "shortage_primary_care", "shortage_dental_care", "shortage_mental_health", "mua", "mup", "mua_ge", "mup_ge",
+            "web_link"
         ]
         if os.path.getsize(self.result_fname) == 0:
             self.insert_row(result_row=heading)
@@ -84,51 +86,206 @@ class MainScraper(scrapy.Spider):
             row = [sheet.cell(row_index, col_index).value for col_index in range(sheet.ncols)]
             self.input_dt.append(row)
 
-        self.start_url = ""
+        self.main_url = "https://www.ruralhealthinfo.org/am-i-rural/report?lat={}&lng={}"
+        self.shortage_details_url = "https://www.ruralhealthinfo.org/am-i-rural/report/shortage-designations?lat={}&lng={}"
 
     def start_requests(self):
         for i, row in enumerate(self.input_dt):
-            if i==0:
+            if i == 0:
                 continue
-            url = ""
-            param1 = ""
+            lat, lng = row[3], row[4]
+            url = self.main_url.format(lat, lng)
             pxy = random.choice(PROXIES)
             request = FormRequest(
                 url=url,
                 method='GET',
                 headers=make_headers(),
-                callback=self.get_links,
-                errback=self.fail_links,
+                callback=self.get_main_info,
+                errback=self.fail_main_info,
                 dont_filter=True,
                 meta={
                     'url': url,
-                    'param1': param1,
-                    # 'proxy': pxy
+                    'row': row,
+                    'proxy': pxy
                     # 'handle_httpstatus_all': True,
                     # 'dont_redirect': True,
                 }
             )
             yield request
 
-    def get_links(self, response):
+    def get_main_info(self, response):
         url = response.meta['url']
-        param1 = response.meta['param1']
-        XPATH = ''
+        row = response.meta['row']
 
-        rows = response.xpath(XPATH)
+        try:
+            census_tract = "".join(response.xpath('//strong[text()="Census Tract:"]/../text()').extract()).strip()
+        except:
+            census_tract = ""
+        try:
+            county = "".join(response.xpath('//strong[text()="County:"]/../text()').extract()).strip()
+        except:
+            county = ""
+        try:
+            rhc = response.xpath(
+                '//table//strong[contains(text(), "CMS - Rural Health Clinics (RHC) Program")]/../following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            rhc = ""
+        try:
+            forhp = response.xpath(
+                '//table//strong[contains(text(), "FORHP - Grant Programs")]/../following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            forhp = ""
+        try:
+            c2010_pct_rural = response.xpath(
+                '//table//strong[contains(text(), "Census 2010, Percent Rural")]/../following-sibling::td/ul/li/text()').extract_first().split(
+                ":")[-1].strip()
+        except:
+            c2010_pct_rural = ""
+        try:
+            cbsa_type = response.xpath('//li[contains(text(), "CBSA Type:")]/text()').extract_first().split(":")[
+                -1].strip()
+        except:
+            cbsa_type = ""
+        try:
+            cbsa_name = response.xpath('//li[contains(text(), "CBSA Name:")]/text()').extract_first().split(":")[
+                -1].strip()
+        except:
+            cbsa_name = ""
+        try:
+            cbsa_id = response.xpath('//li[contains(text(), "CBSA ID:")]/text()').extract_first().split(":")[-1].strip()
+        except:
+            cbsa_id = ""
+        try:
+            ruca_code = response.xpath('//li[contains(text(), "RUCA Code:")]/text()').extract_first().split(":")[
+                -1].strip()
+        except:
+            ruca_code = ""
+        try:
+            rucc_code = response.xpath('//li[contains(text(), "RUCC Code:")]/text()').extract_first().split(":")[
+                -1].strip()
+        except:
+            rucc_code = ""
+        try:
+            uic = response.xpath('//li[contains(text(), "Urban Influence Code:")]/text()').extract_first().split(":")[
+                -1].strip()
+        except:
+            uic = ""
+        try:
+            ua = response.xpath('//li[contains(text(), "UA/UC Number:")]/text()').extract_first().split(":")[-1].strip()
+        except:
+            ua = ""
 
-    def fail_links(self, failure):
+        result_row = [
+            census_tract, county, rhc, forhp, c2010_pct_rural, cbsa_type, cbsa_name, cbsa_id, ruca_code,
+            rucc_code, uic, ua
+        ]
+
+        lat, lng = row[3], row[4]
+        url = self.shortage_details_url.format(lat, lng)
+        pxy = random.choice(PROXIES)
+        request = FormRequest(
+            url=url,
+            method='GET',
+            headers=make_headers(),
+            callback=self.get_shortage_info,
+            errback=self.fail_shortage_info,
+            dont_filter=True,
+            meta={
+                'url': url,
+                'row': row,
+                'result_row': result_row,
+                'proxy': pxy
+                # 'handle_httpstatus_all': True,
+                # 'dont_redirect': True,
+            }
+        )
+        yield request
+
+    def fail_main_info(self, failure):
         pxy = random.choice(PROXIES)
         request = FormRequest(
             url=failure.request.meta['url'],
             method='GET',
             headers=make_headers(),
-            callback=self.get_links,
-            errback=self.fail_links,
+            callback=self.get_main_info,
+            errback=self.fail_main_info,
             dont_filter=True,
             meta={
                 'url': failure.request.meta['url'],
-                'param1': failure.request.meta['param1'],
+                'row': failure.request.meta['row'],
+                'proxy': pxy
+                # 'handle_httpstatus_all': True,
+                # 'dont_redirect': True,
+            }
+        )
+        yield request
+
+    def get_shortage_info(self, response):
+        url = response.meta['url']
+        row = response.meta['row']
+        result_row = response.meta['result_row']
+
+        tree = html.fromstring(response.text)
+        try:
+            shortage_primary_care = response.xpath(
+                '//strong[text()= "Health Professional Shortage Areas"]/../../../..//td[contains(text(), "Primary Care")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            shortage_primary_care = ""
+        try:
+            shortage_dental_care = response.xpath(
+                '//strong[text()= "Health Professional Shortage Areas"]/../../../..//td[contains(text(), "Dental Care")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            shortage_dental_care = ""
+        try:
+            shortage_mental_health = response.xpath(
+                '//strong[text()= "Health Professional Shortage Areas"]/../../../..//td[contains(text(), "Mental Health")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            shortage_mental_health = ""
+        try:
+            mua = response.xpath(
+                '//strong[text()= "Medically Underserved Areas/Populations"]/../../../..//td[contains(text(), "Medically Underserved Area (MUA)")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            mua = ""
+        try:
+            mup = response.xpath(
+                '//strong[text()= "Medically Underserved Areas/Populations"]/../../../..//td[contains(text(), "Medically Underserved Population (MUP)")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            mup = ""
+        try:
+            mua_ge = response.xpath(
+                '//strong[text()= "Medically Underserved Areas/Populations"]/../../../..//td[contains(text(), "Medically Underserved Area - Governor\'s Exception (MUA-GE)")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            mua_ge = ""
+        try:
+            mup_ge = response.xpath(
+                '//strong[text()= "Medically Underserved Areas/Populations"]/../../../..//td[contains(text(), "Medically Underserved Population - Governor\'s Exception (MUP-GE)")]/following-sibling::td[1]/text()').extract_first().strip()
+        except:
+            mup_ge = ""
+
+        lat, lng = row[3], row[4]
+        web_link = self.shortage_details_url.format(lat, lng)
+
+        final_result = row[:6] + result_row + [shortage_primary_care, shortage_dental_care, shortage_mental_health, mua,
+                                               mup, mua_ge, mup_ge, web_link]
+
+        self.total_cnt += 1
+        self.insert_row(final_result)
+        print(f"[Result {self.total_cnt}] {final_result}")
+
+
+    def fail_shortage_info(self, failure):
+        pxy = random.choice(PROXIES)
+        request = FormRequest(
+            url=failure.request.meta['url'],
+            method='GET',
+            headers=make_headers(),
+            callback=self.get_shortage_info,
+            errback=self.fail_shortage_info,
+            dont_filter=True,
+            meta={
+                'url': failure.request.meta['url'],
+                'row': failure.request.meta['row'],
+                'result_row': failure.request.meta['result_row'],
                 # 'proxy': pxy
                 # 'handle_httpstatus_all': True,
                 # 'dont_redirect': True,
