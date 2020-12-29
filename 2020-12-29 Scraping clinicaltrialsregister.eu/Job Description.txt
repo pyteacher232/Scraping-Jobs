@@ -1,0 +1,76 @@
+Deliverables are 2 Python Scripts:
+
+1. I am looking for a Python Script that will allow me to scrape the website https://www.clinicaltrialsregister.eu/ctr-search/search (all 1939 pages worth -- without it breaking)
+to extract Sponsor Name and Starting Data into a CSV file
+
+2. I am also looking for a Python script to extract data from a supplied XML document into CSV. The DOM for the XML is as follows:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<search_results count="8957">
+  <query>Recruiting, Not yet recruiting, Active, not recruiting, Completed, Enrolling by invitation, Unknown status Studies | Phase 1, 2, 3 | Industry | Start date on or after 01/01/2019</query>
+  <!-- Additional study fields may be added over time -->
+  <study rank="1">
+    <nct_id>NCT04686175</nct_id>
+    <title>Evaluation of Safety, Tolerability, and Efficacy of INZ-701 in Adults With ENPP1 Deficiency</title>
+    <acronym/>
+    <status open="Y">Not yet recruiting</status>
+    <study_results>No Results Available</study_results>
+    <conditions>
+      <condition>Ectonucleotide Pyrophosphatase/Phosphodiesterase 1 (ENPP1) Deficiency</condition>
+    </conditions>
+    <interventions>
+      <intervention type="Drug">INZ-701</intervention>
+    </interventions>
+    <outcome_measures>
+      <outcome_measure>Dose Toxicity</outcome_measure>
+      <outcome_measure>Determination of Immunogenicity</outcome_measure>
+      <outcome_measure>Measurement of Plasma Inorganic Pyrophosphate (PPi) in Plasma</outcome_measure>
+      <outcome_measure>Measurement of Fibroblast Growth Factor 23 (FGF23) in plasma</outcome_measure>
+      <outcome_measure>Area under the plasma concentration versus time curve (AUC)</outcome_measure>
+      <outcome_measure>Peak Plasma Concentration (Cmax)</outcome_measure>
+      <outcome_measure>Systemic clearance</outcome_measure>
+    </outcome_measures>
+    <sponsors>
+      <lead_sponsor>Inozyme Pharma</lead_sponsor>
+      <collaborator>IQVIA Biotech</collaborator>
+    </sponsors>
+    <gender>All</gender>
+    <min_age>18 Years</min_age>
+    <max_age>64 Years</max_age>
+    <age_groups>
+      <age_group>Adult</age_group>
+    </age_groups>
+    <phases>
+      <phase>Phase 1</phase>
+      <phase>Phase 2</phase>
+    </phases>
+    <enrollment>9</enrollment>
+    <funded_bys>
+      <funded_by>Industry</funded_by>
+    </funded_bys>
+    <study_types>Interventional</study_types>
+    <exp_acc_types/>
+    <study_designs>
+      <study_design>Allocation: N/A</study_design>
+      <study_design>Intervention Model: Single Group Assignment</study_design>
+      <study_design>Masking: None (Open Label)</study_design>
+      <study_design>Primary Purpose: Treatment</study_design>
+    </study_designs>
+    <other_ids>
+      <other_id>INZ701-101</other_id>
+      <other_id>2020-003716-27</other_id>
+    </other_ids>
+    <start_date>January 1, 2021</start_date>
+    <primary_completion_date>April 24, 2021</primary_completion_date>
+    <completion_date>April 24, 2021</completion_date>
+    <study_first_posted>December 25, 2020</study_first_posted>
+    <last_update_posted>December 25, 2020</last_update_posted>
+    <locations/>
+    <documents/>
+    <url>https://ClinicalTrials.gov/show/NCT04686175</url>
+  </study>
+
+
+I am interested in getting all tag names of "nct_id" + "start_date" + "lead_sponsor" + "collaborator" in CSV per row
+
+Not that for one NCT ID there may be more than 1 collaborator. I would like these listed as additional rows with the same NCT ID, start date, etc.
