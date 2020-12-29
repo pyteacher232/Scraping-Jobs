@@ -17,7 +17,7 @@ def make_headers():
 
 class MainScraper():
     def __init__(self):
-        # self.start_url = "https://www.clinicaltrials.gov/ct2/results/download_fields?down_count=10000&down_flds=all&down_fmt=xml&recrs=abdefm&phase=0124&fund=2&strd_s=01%2F01%2F2019&flds=a&flds=b&flds=y"
+        self.start_url = "https://www.clinicaltrials.gov/ct2/results/download_fields?down_count=10000&down_flds=all&down_fmt=xml&recrs=abdefm&phase=0124&fund=2&strd_s=01%2F01%2F2019&flds=a&flds=b&flds=y"
 
         self.result_fname = os.path.join("Result.csv")
         self.create_result_file()
@@ -31,10 +31,15 @@ class MainScraper():
         self.total_cnt = 0
         self.sess = requests.Session()
 
-    def get_details_from_xml_file(self, xml_fname):
-        print(f"[get_details] xml_fname: {xml_fname}")
+    def start_scraping(self):
+        self.get_details(url=self.start_url)
 
-        root = ET.parse(xml_fname).getroot()
+    def get_details(self, url):
+        print(f"[get_details] url: {url}")
+
+        # root = ET.parse(xml_fname).getroot()
+        r = self.sess.get(url, headers=make_headers(), verify=False)
+        root = ET.fromstring(r.text)
 
         for study in root.findall('study'):
             nct_id = study.find('nct_id').text.strip()
@@ -63,4 +68,4 @@ class MainScraper():
 
 if __name__ == '__main__':
     app = MainScraper()
-    app.get_details_from_xml_file(xml_fname=r"E:\07_Prjct\Git\Scraping-Jobs\2020-12-29 Scraping clinicaltrialsregister.eu\SearchResults.xml")
+    app.start_scraping()
