@@ -4,6 +4,7 @@ import random
 import csv
 import os
 import time
+import xml.etree.ElementTree as ET
 
 def make_headers():
     headers = {
@@ -18,37 +19,50 @@ class MainScraper():
     def __init__(self):
         self.start_url = "https://www.clinicaltrials.gov/ct2/results/download_fields?down_count=10000&down_flds=all&down_fmt=xml&recrs=abdefm&phase=0124&fund=2&strd_s=01%2F01%2F2019&flds=a&flds=b&flds=y"
 
+        self.result_fname = os.path.join("Result.csv")
+        self.create_result_file()
+
+        heading = [
+            "nct_id", "sponsor", "collaborator", "start_date"
+        ]
+        if os.path.getsize(self.result_fname) == 0:
+            self.insert_row(result_row=heading)
+
         self.total_cnt = 0
         self.sess = requests.Session()
 
     def start_scraping(self):
-        self.get_details(self.start_url)
+        self.get_details(xml_fname="SearchResults.xml")
 
-    def get_details(self, url):
-        print(f"[get_details] url: {url}")
+    def get_details(self, xml_fname):
+        print(f"[get_details] xml_fname: {xml_fname}")
 
-        r = self.sess.get(url, headers=make_headers(), verify=False)
-        tree = html.fromstring(r.text)
-        rows = tree.xpath('//table[@class="result"]')
-        for i, row in enumerate(rows):
-            try:
-                EudraCT_num = "".join(row.xpath('.//span[text()="EudraCT Number:"]/../text()')).strip()
-            except:
-                EudraCT_num = ""
-            try:
-                start_date = "".join(row.xpath('.//span[text()="Start Date"]/../text()')).strip()
-            except:
-                start_date = ""
-            try:
-                sponsor_name = "".join(row.xpath('.//span[text()="Sponsor Name:"]/../text()')).strip()
-            except:
-                sponsor_name = ""
-            result_row = [
-                EudraCT_num, start_date, sponsor_name
-            ]
-            self.total_cnt += 1
-            self.insert_row(result_row)
-            print(f"\t[Result {self.total_cnt}] {result_row}")
+        root = ET.parse(xml_fname).getroot()
+
+        for study in root.findall('study'):
+            nct_id = study.find('nct_id').text.strip()
+            start_date = study.find('start_date').text.strip()
+            sponsors = [e.text.strip() for e in study.findall('sponsors/lead_sponsor')]
+            collaborators = [e.text.strip() for e in study.findall('sponsors/collaborator')]
+
+            for sponsor in sponsors:
+                for collaborator in collaborators:
+                    result_row = [
+                        nct_id, sponsor, collaborator, start_date
+                    ]
+                    self.total_cnt += 1
+                    self.insert_row(result_row)
+                    print(f"[Result {self.total_cnt}] {result_row}")
+
+
+    def create_result_file(self):
+        self.result_fp = open(self.result_fname, 'w', encoding='utf-8', newline='')
+        self.result_writer = csv.writer(self.result_fp)
+
+    def insert_row(self, result_row):
+        result_row = [str(elm) for elm in result_row]
+        self.result_writer.writerow(result_row)
+        self.result_fp.flush()
 
 
 if __name__ == '__main__':
